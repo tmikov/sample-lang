@@ -1,0 +1,93 @@
+
+a + b + c + d
+
+
+id  ("a")
+plus
+id  ("b")
+plus
+id  ("c")
+plus
+id  ("d")
+
+a + b
+a
+a + b + c
+
+
+IDENT: [a-z][a-z0-9]*
+
+
+IDENT PLUS NUMBER
+
+expression ::= addition
+addition ::= IDENT (PLUS IDENT)*
+
+
+expression ::= addition
+addition ::= atom |
+             atom PLUS addition
+atom ::= IDENT |
+         NUMBER
+
+
+expression ::= addition
+addition ::= atom |
+             addition PLUS atom
+atom ::= IDENT |
+         NUMBER
+
+expression ::= addition
+addition ::= (atom PLUS)+ atom |
+             atom
+atom ::= IDENT |
+         NUMBER
+
+
+a + b + c
+
+expression               
+    addition
+        atom             "a"
+        PLUS             +
+        addition
+            atom         "b"
+            PLUS         +
+            addition
+                atom     "c"
+
+
+expression
+    addition
+         addition
+            addition
+                atom    "a"
+            PLUS        +
+            addition
+                atom    "b"
+        PLUS            +
+            addition
+                atom    "c"
+
+
+term: IDENT PLUS MINUS LPAR RPAR MUL DIV NUMBER SEMI ASSIGN RETURN
+
+x = 10;
+y = x + 10
+
+program ::= (statement SEMI)* return
+
+return ::= RETURN expression SEMI
+
+statement ::= IDENT ASSIGN expression
+
+expression ::= addition
+addition ::= (mul (PLUS|MINUS))+ mul |
+             mul
+mul ::= (atom (MUL|DIV))+ atom |
+        atom
+atom ::= IDENT |
+         NUMBER |
+         LPAR expression RPAR
+
+
