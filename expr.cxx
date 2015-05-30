@@ -5,6 +5,12 @@
 #include <stdarg.h>
 #include <map>
 
+#include "ast.h"
+
+#define _ACODE(t) #t,
+const char * const AstCodeNames[] = { AST_CODES };
+#undef _ACODE
+
 
 #define TERMS \
     TERM(_EOF,"<end of file>")\
@@ -190,20 +196,15 @@ Term getNextTerm ()
 }
 
 
-static long s_result;
-static bool s_performOperations;
-static std::map<std::string,long> s_vars;
-
-static void parseExpression ();
-static void parseStatementList ();
-static void parseStatement ();
-static void parseIf ();
+static Expr * parseExpression ();
+static Block * parseStatementList ();
+static Statement * parseStatement ();
+static If * parseIf ();
 
 void initParser ()
 {
     initScanner();
     getNextTerm();
-    s_performOperations = true;
 }
 static void need ( Term term )
 {
@@ -212,160 +213,163 @@ static void need ( Term term )
     getNextTerm();
 }
 
-static void parseAtom ()
+static Expr * parseAtom ()
 {
+    Expr * res;
     if (s_term == IDENT) {
-        auto it = s_vars.find( s_ident );
-        if (it == s_vars.end())
-            error( "Undefined variable %s", s_ident.c_str() );
-        s_result = it->second;
+        res = new Ident(s_ident);
         getNextTerm();
     }
     else if (s_term == LPAR) {
         getNextTerm();
-        parseExpression();
+        res = parseExpression();
         need( RPAR );
     }
     else if (s_term == NUMBER) {
-        s_result = s_number;
+        res = new Number(s_number);
         getNextTerm();
-    } else
+    }
+    else {
         error( "Unexpected symbol %s", s_termUI[s_term] );
+        res = NULL;
+    }
+    return res;
 }
 
-static void parseMul ()
+static Expr * parseMul ()
 {
-    parseAtom();
-    long tmp = s_result;
+    Expr *left = parseAtom();
     while (s_term == MUL || s_term == DIV) {
         Term saveTerm = s_term;
         getNextTerm();
-        parseAtom();
+        Expr * right = parseAtom();
         if (saveTerm == MUL)
-            tmp *= s_result;
+            left = new BinOp(AstCode::Mul, left, right);
         else
-            tmp /= s_result;
+            left = new BinOp(AstCode::Div, left, right);
     }
-    s_result = tmp;
+    return left;
 }
 
-static void parseAddition ()
+static Expr * parseAddition ()
 {
-    parseMul();
-    long tmp = s_result;
+    Expr *left = parseMul();
     while (s_term == PLUS || s_term == MINUS) {
         Term saveTerm = s_term;
         getNextTerm();
-        parseMul();
+        Expr * right = parseMul();
         if (saveTerm == PLUS)
-            tmp += s_result;
+            left = new BinOp(AstCode::Add, left, right);
         else
-            tmp -= s_result;
+            left = new BinOp(AstCode::Sub, left, right);
     }
-    s_result = tmp;
+    return left;
 }
 
-static void parseCond ()
+static Expr * parseCond ()
 {
-    parseAddition();
-    long tmp = s_result;
+    Expr * left = parseAddition();
     while (s_term == LT || s_term == GT || s_term == EQ || s_term == NE) {
         Term saveTerm = s_term;
         getNextTerm();
-        parseAddition();
+        Expr * right = parseAddition();
         switch (saveTerm) {
-            case LT: tmp = tmp < s_result; break;
-            case GT: tmp = tmp > s_result; break;
-            case EQ: tmp = tmp == s_result; break;
-            case NE: tmp = tmp != s_result; break;
+            case LT: left = new BinOp(AstCode::LT, left, right); break;
+            case GT: left = new BinOp(AstCode::GT, left, right); break;
+            case EQ: left = new BinOp(AstCode::EQ, left, right); break;
+            case NE: left = new BinOp(AstCode::NE, left, right); break;
         }
     }
-    s_result = tmp;
+    return left;
 }
-static void parseExpression ()
+static Expr * parseExpression ()
 {
-    parseCond();
+    return parseCond();
 }
 
-static void parseIf ()
+static If * parseIf ()
 {
     need(IF);
     need(LPAR);
-    parseExpression();
-    long cond = s_result;
-    bool perform = s_performOperations;
+    Expr * cond = parseExpression();
     need(RPAR);
-    s_performOperations = perform & (cond != 0);
-    parseStatement();
+    Statement * thenClause = parseStatement();
+    Statement * elseClause = NULL;
     if (s_term == ELSE) {
-        s_performOperations = perform & (cond == 0);
         getNextTerm();
-        parseStatement();
+        elseClause = parseStatement();
     }
-    s_performOperations = perform;
+    return new If(cond, thenClause, elseClause);
 }
 
-static void parseStatement ()
+static Statement * parseStatement ()
 {
+    Statement * res;
     switch (s_term) {
         case IDENT: {
             auto saveIdent = s_ident;
             getNextTerm();
             need( ASSIGN );
-            parseExpression();
-            if (s_performOperations)
-                s_vars[saveIdent] = s_result;
+            Expr * value = parseExpression();
+            res = new Assign(saveIdent, value);
             need(SEMI);
         }
         break;
 
         case LBRACE:
             getNextTerm();
-            parseStatementList();
+            res = parseStatementList();
             need(RBRACE);
             break;
 
         case IF:
-            parseIf();
+            res = parseIf();
             break;
 
         case SEMI:
+            res = NULL;
             getNextTerm();
             break;
 
         default:
             error( "Unexpected '%s' at start of statement", s_termUI[s_term] );
     };
+    return res;
 }
 
-static void parseReturn ()
+static Return * parseReturn ()
 {
     need(RETURN);
-    parseExpression();
+    Expr * value = parseExpression();
     need(SEMI);
+    return new Return(value);
 }
 
-static void parseStatementList ()
+static Block * parseStatementList ()
 {
+    std::vector<StatementPtr> list;
+
     while (s_term == IDENT || s_term == LBRACE || s_term == IF || s_term == SEMI) {
-        parseStatement();
+        Statement * stmt = parseStatement();
+        if (stmt)
+            list.push_back( StatementPtr(stmt) );
     }
+
+    return new Block( std::move(list) );
 }
 
-static void parseProgram ()
+static Program * parseProgram ()
 {
-    parseStatementList();
-    parseReturn();
+    Block * body = parseStatementList();
+    Return * ret = parseReturn();
+    return new Program( body, ret );
 }
 
 int main ()
 {
     initParser();
-    parseProgram();
-    for ( const auto & v : s_vars ) {
-        printf( "%s = %ld\n", v.first.c_str(), v.second );
-    }
-    printf( "Result: %ld\n", s_result );
+    Program * prog = parseProgram();
+    prog->print(0);
     return 0;
 }
 
