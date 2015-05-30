@@ -70,18 +70,32 @@ expression
                 atom    "c"
 
 
-term: IDENT PLUS MINUS LPAR RPAR MUL DIV NUMBER SEMI ASSIGN RETURN
+loadvar $a
+loadvar $b
+add
+loadvar $c
+add
+
+term: IDENT PLUS MINUS LPAR RPAR MUL DIV NUMBER SEMI ASSIGN RETURN LBRACE
+RBRACE
 
 x = 10;
 y = x + 10
 
-program ::= (statement SEMI)* return
+program ::= statement-list return
 
 return ::= RETURN expression SEMI
 
-statement ::= IDENT ASSIGN expression
+statement-list: (statement)*
+statement ::= IDENT ASSIGN expression SEMI |
+              LBRACE staement-list RBRACE |
+              IF LPAR expression RPAR statement |
+              IF LPAR expression RPAR statement ELSE statement |
+              SEMI
 
-expression ::= addition
+expression ::= cond
+cond ::= (addition (LT|GT|EQ|NE))+ addition |
+             addition
 addition ::= (mul (PLUS|MINUS))+ mul |
              mul
 mul ::= (atom (MUL|DIV))+ atom |

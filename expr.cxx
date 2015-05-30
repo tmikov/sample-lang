@@ -15,9 +15,17 @@
     TERM(DIV,"/")\
     TERM(LPAR,"(")\
     TERM(RPAR,")")\
+    TERM(EQ,"==")\
+    TERM(NE,"!=")\
+    TERM(LT,"<")\
+    TERM(GT,">")\
+    TERM(LBRACE,"{")\
+    TERM(RBRACE,"}")\
     TERM(NUMBER,"number") \
     TERM(SEMI,";") \
     TERM(ASSIGN,"=") \
+    TERM(IF,"if") \
+    TERM(ELSE,"else") \
     TERM(RETURN,"return")
 
 
@@ -58,6 +66,8 @@ static int nextChar ()
 void initScanner ()
 {
     s_kw["return"] = RETURN;
+    s_kw["if"] = IF;
+    s_kw["else"] = ELSE;
     s_line = 1; s_col = 0;
     s_nextCh = nextChar();
 }
@@ -66,6 +76,16 @@ static void saveStart ()
 {
     s_startLine = s_line;
     s_startCol = s_col;
+}
+
+static void error ( const char * msg, ... )
+{
+    va_list  ap;
+    va_start(ap, msg);
+    fprintf( stderr, "Error line %d col %d:", s_startLine, s_startCol );
+    vfprintf( stderr, msg, ap );
+    fputc( '\n', stderr );
+    exit( 1 );
 }
 
 Term getNextTerm ()
@@ -110,11 +130,41 @@ Term getNextTerm ()
         }
         else if (s_nextCh == '=') {
             s_nextCh = nextChar();
-            return s_term = ASSIGN;
+            if (s_nextCh == '=') {
+                s_nextCh = nextChar();
+                return s_term = EQ;
+            }
+            else
+                return s_term = ASSIGN;
+        }
+        else if (s_nextCh == '!') {
+            s_nextCh = nextChar();
+            if (s_nextCh == '=') {
+                s_nextCh = nextChar();
+                return s_term = NE;
+            }
+            else
+                error( "Invalid character '%c'", s_nextCh );
         }
         else if (s_nextCh == ';') {
             s_nextCh = nextChar();
             return s_term = SEMI;
+        }
+        else if (s_nextCh == '{') {
+            s_nextCh = nextChar();
+            return s_term = LBRACE;
+        }
+        else if (s_nextCh == '}') {
+            s_nextCh = nextChar();
+            return s_term = RBRACE;
+        }
+        else if (s_nextCh == '<') {
+            s_nextCh = nextChar();
+            return s_term = LT;
+        }
+        else if (s_nextCh == '>') {
+            s_nextCh = nextChar();
+            return s_term = GT;
         }
         else if (isdigit(s_nextCh)) {
             s_number = 0;
@@ -139,27 +189,22 @@ Term getNextTerm ()
     }
 }
 
+
+static long s_result;
+static bool s_performOperations;
+static std::map<std::string,long> s_vars;
+
+static void parseExpression ();
+static void parseStatementList ();
+static void parseStatement ();
+static void parseIf ();
+
 void initParser ()
 {
     initScanner();
     getNextTerm();
+    s_performOperations = true;
 }
-
-static void error ( const char * msg, ... )
-{
-    va_list  ap;
-    va_start(ap, msg);
-    fprintf( stderr, "Error line %d col %d:", s_startLine, s_startCol );
-    vfprintf( stderr, msg, ap );
-    fputc( '\n', stderr );
-    exit( 1 );
-}
-
-static long s_result;
-static std::map<std::string,long> s_vars;
-
-static void parseExpression ();
-
 static void need ( Term term )
 {
     if (s_term != term)
@@ -220,20 +265,77 @@ static void parseAddition ()
     s_result = tmp;
 }
 
-static void parseExpression ()
+static void parseCond ()
 {
     parseAddition();
+    long tmp = s_result;
+    while (s_term == LT || s_term == GT || s_term == EQ || s_term == NE) {
+        Term saveTerm = s_term;
+        getNextTerm();
+        parseAddition();
+        switch (saveTerm) {
+            case LT: tmp = tmp < s_result; break;
+            case GT: tmp = tmp > s_result; break;
+            case EQ: tmp = tmp == s_result; break;
+            case NE: tmp = tmp != s_result; break;
+        }
+    }
+    s_result = tmp;
+}
+static void parseExpression ()
+{
+    parseCond();
+}
+
+static void parseIf ()
+{
+    need(IF);
+    need(LPAR);
+    parseExpression();
+    long cond = s_result;
+    bool perform = s_performOperations;
+    need(RPAR);
+    s_performOperations = perform & (cond != 0);
+    parseStatement();
+    if (s_term == ELSE) {
+        s_performOperations = perform & (cond == 0);
+        getNextTerm();
+        parseStatement();
+    }
+    s_performOperations = perform;
 }
 
 static void parseStatement ()
 {
-    if (s_term != IDENT)
-        error( "Identifier expected at start of statement instead of '%s'", s_termUI[s_term] );
-    auto saveIdent = s_ident;
-    getNextTerm();
-    need( ASSIGN );
-    parseExpression();
-    s_vars[saveIdent] = s_result;
+    switch (s_term) {
+        case IDENT: {
+            auto saveIdent = s_ident;
+            getNextTerm();
+            need( ASSIGN );
+            parseExpression();
+            if (s_performOperations)
+                s_vars[saveIdent] = s_result;
+            need(SEMI);
+        }
+        break;
+
+        case LBRACE:
+            getNextTerm();
+            parseStatementList();
+            need(RBRACE);
+            break;
+
+        case IF:
+            parseIf();
+            break;
+
+        case SEMI:
+            getNextTerm();
+            break;
+
+        default:
+            error( "Unexpected '%s' at start of statement", s_termUI[s_term] );
+    };
 }
 
 static void parseReturn ()
@@ -243,12 +345,16 @@ static void parseReturn ()
     need(SEMI);
 }
 
+static void parseStatementList ()
+{
+    while (s_term == IDENT || s_term == LBRACE || s_term == IF || s_term == SEMI) {
+        parseStatement();
+    }
+}
+
 static void parseProgram ()
 {
-    while (s_term != _EOF && s_term != RETURN) {
-        parseStatement();
-        need( SEMI );
-    }
+    parseStatementList();
     parseReturn();
 }
 
