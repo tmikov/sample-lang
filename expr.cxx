@@ -32,6 +32,7 @@ const char * const AstCodeNames[] = { AST_CODES };
     TERM(ASSIGN,"=") \
     TERM(IF,"if") \
     TERM(ELSE,"else") \
+    TERM(WHILE,"while") \
     TERM(RETURN,"return")
 
 
@@ -74,6 +75,7 @@ void initScanner ()
     s_kw["return"] = RETURN;
     s_kw["if"] = IF;
     s_kw["else"] = ELSE;
+    s_kw["while"] = WHILE;
     s_line = 1; s_col = 0;
     s_nextCh = nextChar();
 }
@@ -89,6 +91,16 @@ static void error ( const char * msg, ... )
     va_list  ap;
     va_start(ap, msg);
     fprintf( stderr, "Error line %d col %d:", s_startLine, s_startCol );
+    vfprintf( stderr, msg, ap );
+    fputc( '\n', stderr );
+    exit( 1 );
+}
+
+void runtimeError ( const char * msg, ... )
+{
+    va_list  ap;
+    va_start(ap, msg);
+    fprintf( stderr, "Runtime error:" );
     vfprintf( stderr, msg, ap );
     fputc( '\n', stderr );
     exit( 1 );
@@ -302,6 +314,15 @@ static If * parseIf ()
     return new If(cond, thenClause, elseClause);
 }
 
+static While * parseWhile ()
+{
+    need(WHILE);
+    need(LPAR);
+    Expr * cond = parseExpression();
+    need(RPAR);
+    Statement *body = parseStatement();
+    return new While(cond, body);
+}
 static Statement * parseStatement ()
 {
     Statement * res;
@@ -324,6 +345,10 @@ static Statement * parseStatement ()
 
         case IF:
             res = parseIf();
+            break;
+
+        case WHILE:
+            res = parseWhile();
             break;
 
         case SEMI:
@@ -349,7 +374,7 @@ static Block * parseStatementList ()
 {
     std::vector<StatementPtr> list;
 
-    while (s_term == IDENT || s_term == LBRACE || s_term == IF || s_term == SEMI) {
+    while (s_term == IDENT || s_term == LBRACE || s_term == IF || s_term == WHILE || s_term == SEMI) {
         Statement * stmt = parseStatement();
         if (stmt)
             list.push_back( StatementPtr(stmt) );
@@ -370,6 +395,11 @@ int main ()
     initParser();
     Program * prog = parseProgram();
     prog->print(0);
+    Env env;
+    long result = prog->eval( env );
+    for ( const auto & var : env.vars )
+        printf( "%s = %ld\n", var.first.c_str(), var.second );
+    printf( "\nReturned result: %ld\n", result );
     return 0;
 }
 
