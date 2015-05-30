@@ -174,6 +174,7 @@ static void parseAtom ()
         if (it == s_vars.end())
             error( "Undefined variable %s", s_ident.c_str() );
         s_result = it->second;
+        printf( "loadvar $%s\n", it->first.c_str() );
         getNextTerm();
     }
     else if (s_term == LPAR) {
@@ -183,6 +184,7 @@ static void parseAtom ()
     }
     else if (s_term == NUMBER) {
         s_result = s_number;
+        printf( "loadimm %ld\n", s_number );
         getNextTerm();
     } else
         error( "Unexpected symbol %s", s_termUI[s_term] );
@@ -197,9 +199,9 @@ static void parseMul ()
         getNextTerm();
         parseAtom();
         if (saveTerm == MUL)
-            tmp *= s_result;
+            printf( "mul\n" );
         else
-            tmp /= s_result;
+            printf( "div\n" );
     }
     s_result = tmp;
 }
@@ -213,9 +215,9 @@ static void parseAddition ()
         getNextTerm();
         parseMul();
         if (saveTerm == PLUS)
-            tmp += s_result;
+            printf( "add\n" );
         else
-            tmp -= s_result;
+            printf( "sub\n" );
     }
     s_result = tmp;
 }
@@ -234,6 +236,7 @@ static void parseStatement ()
     need( ASSIGN );
     parseExpression();
     s_vars[saveIdent] = s_result;
+    printf( "store $%s\n", saveIdent.c_str() );
 }
 
 static void parseReturn ()
@@ -241,6 +244,7 @@ static void parseReturn ()
     need(RETURN);
     parseExpression();
     need(SEMI);
+    printf( "return\n" );
 }
 
 static void parseProgram ()
@@ -256,10 +260,10 @@ int main ()
 {
     initParser();
     parseProgram();
-    for ( const auto & v : s_vars ) {
-        printf( "%s = %ld\n", v.first.c_str(), v.second );
-    }
-    printf( "Result: %ld\n", s_result );
+//    for ( const auto & v : s_vars ) {
+//        printf( "%s = %ld\n", v.first.c_str(), v.second );
+//    }
+//    printf( "Result: %ld\n", s_result );
     return 0;
 }
 

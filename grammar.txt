@@ -70,6 +70,12 @@ expression
                 atom    "c"
 
 
+loadvar $a
+loadvar $b
+add
+loadvar $c
+add
+
 term: IDENT PLUS MINUS LPAR RPAR MUL DIV NUMBER SEMI ASSIGN RETURN
 
 x = 10;
