@@ -1,0 +1,18 @@
+= README
+Tzvetan Mikov <tmikov@gmail.com>
+
+== Sample Language
+
+A very simple programming language illustrating lexing, parsing, AST construction and
+evaluation. Implemented from scratch during a couple of flights back from JSConf 2015 
+(Jacksonville) to San Francisco.
+
+Due to the limited time, it was only intended to illustate the basic principles,
+not show production quality code (for example it doesn't exactly free all allocated memory).
+
+The language has C-like syntax and supports variable assignment (only long integer values),
+if-then-else conditionals, while loops, function calls, dynamic scoping,
+and a foreign function interface.
+
+Examples can be seen in the +examples/+ directory.
+
