@@ -451,12 +451,62 @@ static Program * parseProgram ()
     return new Program( body, ret );
 }
 
+struct NativeFunction : public Function
+{
+    long (* const fn)(Env & env, const std::vector<ExprPtr> & args);
+    NativeFunction(const char * name, long (*fn)(Env & env, const std::vector<ExprPtr> & args)) :
+            Function( name, std::vector<std::string>(), NULL ), fn(fn) {}
+
+    virtual void print ( int indent )
+    {
+        printIndent(indent);
+        printf( "Natuve Function %s (", name.c_str() );
+        for ( auto it = params.begin(); it != params.end(); ++it ) {
+            if (it != params.begin())
+                printf( ", " );
+            printf( "%s", it->c_str() );
+        }
+        printf( ")\n" );
+    }
+
+    virtual long eval ( Env & env )
+    {
+        env.funcs[name] = this;
+        return 0;
+    }
+
+    virtual long call ( Env & env, const std::vector<ExprPtr> & args )
+    {
+        return fn( env, args );
+    }
+};
+
+void registerNativeFunction ( Env & env, const char * name, long (*fn)(Env & env, const std::vector<ExprPtr> & args) )
+{
+    NativeFunction * n = new NativeFunction( name, fn );
+    n->eval( env );
+}
+
+static long print ( Env & env, const std::vector<ExprPtr> & args )
+{
+    for ( auto it = args.begin(); it != args.end(); ++it ) {
+        if (it != args.begin())
+            printf( ", " );
+        printf( "%ld", (*it)->eval( env ) );
+    }
+    printf( "\n" );
+    return 0;
+}
+
 int main ()
 {
     initParser();
     Program * prog = parseProgram();
     prog->print(0);
+
     Env env(NULL);
+    registerNativeFunction( env, "print", print );
+
     long result = prog->eval( env );
     for ( const auto & var : env.vars )
         printf( "%s = %ld\n", var.first.c_str(), var.second );

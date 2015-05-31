@@ -335,7 +335,7 @@ struct Function : public Statement
         return 0;
     }
 
-    long call ( Env & env, const std::vector<ExprPtr> & args )
+    virtual long call ( Env & env, const std::vector<ExprPtr> & args )
     {
         long result;
         Env funcEnv( &env );
