@@ -10,16 +10,35 @@
 
 void runtimeError ( const char * msg, ... );
 
+struct Function;
+
 struct Env
 {
+    Env * const parent;
     std::map<std::string,long> vars;
+    std::map<std::string,Function*> funcs;
+
+    Env(Env *const parent) : parent(parent) { }
 
     long getVar ( const std::string name )
     {
         auto it = vars.find( name );
         if (it != vars.end())
             return it->second;
+        if (parent)
+            return parent->getVar(name);
         runtimeError( "Undefined variable %s", name.c_str() );
+        return 0;
+    }
+
+    Function * getFunc ( const std::string name )
+    {
+        auto it = funcs.find( name );
+        if (it != funcs.end())
+            return it->second;
+        if (parent)
+            return parent->getFunc(name);
+        runtimeError( "Undefined function %s", name.c_str() );
         return 0;
     }
 };
@@ -27,6 +46,7 @@ struct Env
 #define AST_CODES \
   _ACODE(Number) \
   _ACODE(Ident) \
+  _ACODE(FunctionCall) \
   _ACODE(Expr) \
   _ACODE(BinOp) \
   _ACODE(Return) \
@@ -34,6 +54,7 @@ struct Env
   _ACODE(While) \
   _ACODE(Assign) \
   _ACODE(Block) \
+  _ACODE(Function) \
   _ACODE(Program) \
   _ACODE(Mul) _ACODE(Div) _ACODE(Add) _ACODE(Sub) _ACODE(LT) _ACODE(GT) _ACODE(EQ) _ACODE(NE)
 
@@ -67,6 +88,7 @@ struct Expr : public Ast
 {
     Expr(const AstCode::T &code) : Ast(code) { }
 };
+typedef std::shared_ptr<Expr> ExprPtr;
 
 struct Atom : public Expr
 {
@@ -268,7 +290,7 @@ struct Program : public Ast
     Return * const returnStmt;
 
     Program(Block *const body, Return *const returnStmt) :
-        Ast(AstCode::Program), body(body), returnStmt(returnStmt) { }
+            Ast(AstCode::Program), body(body), returnStmt(returnStmt) { }
 
     virtual void print ( int indent )
     {
@@ -284,6 +306,67 @@ struct Program : public Ast
         return returnStmt->eval( env );
     }
 };
+
+struct Function : public Statement
+{
+    const std::string name;
+    std::vector<std::string> params;
+    Program * const body;
+
+    Function ( const std::string & name, std::vector<std::string> && params, Program * body ) :
+        Statement(AstCode::Function), name(name), params(params), body(body) {};
+
+    virtual void print ( int indent )
+    {
+        printIndent(indent);
+        printf( "Function %s (", name.c_str() );
+        for ( auto it = params.begin(); it != params.end(); ++it ) {
+            if (it != params.begin())
+                printf( ", " );
+            printf( "%s", it->c_str() );
+        }
+        printf( ")\n" );
+        body->print( indent + INDENT_STEP );
+    }
+
+    virtual long eval ( Env & env )
+    {
+        env.funcs[name] = this;
+        return 0;
+    }
+
+    long call ( Env & env, const std::vector<ExprPtr> & args )
+    {
+        long result;
+        Env funcEnv( &env );
+        for ( int i = 0, e = params.size(); i < e; ++i ) {
+           long v = i < args.size() ? args[i]->eval( env ) : 0;
+           funcEnv.vars[params[i]] = v;
+        }
+        return body->eval( funcEnv );
+    }
+};
+
+struct FunctionCall : public Atom
+{
+    const std::string name;
+    const std::vector<ExprPtr> args;
+    FunctionCall ( const std::string & name, std::vector<ExprPtr> && args ) :
+            Atom(AstCode::FunctionCall), name(name), args(args) {}
+
+    virtual void print ( int indent )
+    {
+        printIndent(indent);
+        printf( "call %s\n", name.c_str() );
+        for ( const auto & a : args )
+            a->print( indent + INDENT_STEP );
+    }
+    virtual long eval ( Env & env )
+    {
+        return env.getFunc( name )->call( env, args );
+    }
+};
+
 
 struct AstVisitor
 {

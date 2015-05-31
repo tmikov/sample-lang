@@ -91,6 +91,7 @@ statement ::= IDENT ASSIGN expression SEMI |
               LBRACE staement-list RBRACE |
               IF LPAR expression RPAR statement |
               IF LPAR expression RPAR statement ELSE statement |
+              FUNCTION IDENT LPAR ident-list RPAR LBRACE program RBRACE |
               SEMI
 
 expression ::= cond
@@ -101,6 +102,7 @@ addition ::= (mul (PLUS|MINUS))+ mul |
 mul ::= (atom (MUL|DIV))+ atom |
         atom
 atom ::= IDENT |
+         IDENT LPAR (expr COMA)* expr RPAR
          NUMBER |
          LPAR expression RPAR
 

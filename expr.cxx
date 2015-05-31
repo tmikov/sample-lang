@@ -29,11 +29,13 @@ const char * const AstCodeNames[] = { AST_CODES };
     TERM(RBRACE,"}")\
     TERM(NUMBER,"number") \
     TERM(SEMI,";") \
+    TERM(COMMA,",") \
     TERM(ASSIGN,"=") \
     TERM(IF,"if") \
     TERM(ELSE,"else") \
     TERM(WHILE,"while") \
-    TERM(RETURN,"return")
+    TERM(RETURN,"return") \
+    TERM(FN,"fn")
 
 
 #define TERM(t,_) t,
@@ -76,6 +78,7 @@ void initScanner ()
     s_kw["if"] = IF;
     s_kw["else"] = ELSE;
     s_kw["while"] = WHILE;
+    s_kw["fn"] = FN;
     s_line = 1; s_col = 0;
     s_nextCh = nextChar();
 }
@@ -168,6 +171,10 @@ Term getNextTerm ()
             s_nextCh = nextChar();
             return s_term = SEMI;
         }
+        else if (s_nextCh == ',') {
+            s_nextCh = nextChar();
+            return s_term = COMMA;
+        }
         else if (s_nextCh == '{') {
             s_nextCh = nextChar();
             return s_term = LBRACE;
@@ -212,6 +219,7 @@ static Expr * parseExpression ();
 static Block * parseStatementList ();
 static Statement * parseStatement ();
 static If * parseIf ();
+static Program * parseProgram ();
 
 void initParser ()
 {
@@ -225,12 +233,31 @@ static void need ( Term term )
     getNextTerm();
 }
 
+static FunctionCall * parseFunctionCall ( const std::string & name )
+{
+    std::vector<ExprPtr> args;
+    need(LPAR);
+    if (s_term != RPAR) {
+        args.push_back( ExprPtr(parseExpression()) );
+        while (s_term == COMMA) {
+            getNextTerm();
+            args.push_back( ExprPtr(parseExpression()) );
+        }
+    }
+    need(RPAR);
+    return new FunctionCall( name, std::move(args) );
+}
+
 static Expr * parseAtom ()
 {
     Expr * res;
     if (s_term == IDENT) {
-        res = new Ident(s_ident);
+        std::string saveIdent = s_ident;
         getNextTerm();
+        if (s_term == LPAR)
+            res = parseFunctionCall(saveIdent);
+        else
+            res = new Ident(saveIdent);
     }
     else if (s_term == LPAR) {
         getNextTerm();
@@ -323,6 +350,36 @@ static While * parseWhile ()
     Statement *body = parseStatement();
     return new While(cond, body);
 }
+
+static Function * parseFunction ()
+{
+    need(FN);
+    if (s_term != IDENT)
+        error( "Identifier expected after 'fn'" );
+    std::string name = s_ident;
+    getNextTerm();
+    need(LPAR);
+    std::vector<std::string> params;
+    if (s_term != RPAR) {
+        if (s_term != IDENT)
+            error( "Identifier expected in function parameter list" );
+        params.push_back(s_ident);
+        getNextTerm();
+        while (s_term == COMMA) {
+            getNextTerm();
+            if (s_term != IDENT)
+                error( "Identifier expected in function parameter list" );
+            params.push_back(s_ident);
+            getNextTerm();
+        }
+    }
+    need(RPAR);
+    need(LBRACE);
+    Program * body = parseProgram();
+    need(RBRACE);
+    return new Function(name, std::move(params), body);
+}
+
 static Statement * parseStatement ()
 {
     Statement * res;
@@ -351,6 +408,10 @@ static Statement * parseStatement ()
             res = parseWhile();
             break;
 
+        case FN:
+            res = parseFunction();
+            break;
+
         case SEMI:
             res = NULL;
             getNextTerm();
@@ -374,7 +435,7 @@ static Block * parseStatementList ()
 {
     std::vector<StatementPtr> list;
 
-    while (s_term == IDENT || s_term == LBRACE || s_term == IF || s_term == WHILE || s_term == SEMI) {
+    while (s_term == IDENT || s_term == LBRACE || s_term == IF || s_term == WHILE || s_term == SEMI || s_term == FN ) {
         Statement * stmt = parseStatement();
         if (stmt)
             list.push_back( StatementPtr(stmt) );
@@ -395,7 +456,7 @@ int main ()
     initParser();
     Program * prog = parseProgram();
     prog->print(0);
-    Env env;
+    Env env(NULL);
     long result = prog->eval( env );
     for ( const auto & var : env.vars )
         printf( "%s = %ld\n", var.first.c_str(), var.second );

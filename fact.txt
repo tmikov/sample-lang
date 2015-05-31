@@ -1,0 +1,21 @@
+fn fact1 ( i ) {
+  if (i < 2)
+    res = i;
+  else
+    res = fact1( i - 1 ) * i;
+  return res;
+}
+
+fn fact2 ( i ) {
+  res = i;
+  while (i > 2) {
+    i = i - 1;
+    res = res * i;
+  }
+  return res;
+}
+
+f1 = fact1( 4 );
+f2 = fact2( 4 );
+
+return f1 == f2;

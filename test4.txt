@@ -1,0 +1,9 @@
+c = 5;
+fn add ( a, b ) {
+  fn helper () {
+    return a + c;
+  }
+  a = helper();
+  return a + b;
+}
+return add( 10, 3 );

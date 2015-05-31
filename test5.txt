@@ -1,0 +1,9 @@
+fn fn1 () {
+  return fn2() + 10;
+}
+
+fn fn2 () {
+  return 32;
+}
+
+return fn1();
