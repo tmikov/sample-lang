@@ -17,6 +17,7 @@ fn fact2 ( i ) {
 
 f1 = fact1( 4 );
 f2 = fact2( 4 );
-t = print( f1, f2 );
+
+print( f1, f2 );
 
 return f1 == f2;

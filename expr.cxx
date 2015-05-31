@@ -387,9 +387,13 @@ static Statement * parseStatement ()
         case IDENT: {
             auto saveIdent = s_ident;
             getNextTerm();
-            need( ASSIGN );
-            Expr * value = parseExpression();
-            res = new Assign(saveIdent, value);
+            if (s_term == LPAR) {
+                res = new StatementExpr( parseFunctionCall( saveIdent ) );
+            } else {
+                need( ASSIGN );
+                Expr * value = parseExpression();
+                res = new Assign(saveIdent, value);
+            }
             need(SEMI);
         }
         break;

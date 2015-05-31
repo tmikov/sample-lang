@@ -56,6 +56,7 @@ struct Env
   _ACODE(Block) \
   _ACODE(Function) \
   _ACODE(Program) \
+  _ACODE(StmtExpr) \
   _ACODE(Mul) _ACODE(Div) _ACODE(Add) _ACODE(Sub) _ACODE(LT) _ACODE(GT) _ACODE(EQ) _ACODE(NE)
 
 struct AstCode {
@@ -185,6 +186,25 @@ struct Statement : public Ast
     Statement(const AstCode::T &code) : Ast(code) { }
 };
 typedef std::shared_ptr<Statement> StatementPtr;
+
+struct StatementExpr : public Statement
+{
+    Expr * const expr;
+
+    StatementExpr(Expr *const expr) : Statement(AstCode::StmtExpr), expr(expr) { }
+
+    virtual void print ( int indent )
+    {
+        printIndent(indent);
+        printf( "StmtExpr\n" );
+        expr->print( indent + INDENT_STEP );
+    }
+
+    virtual long eval ( Env & env )
+    {
+        return expr->eval( env );
+    }
+};
 
 struct If : public Statement
 {

@@ -88,6 +88,7 @@ return ::= RETURN expression SEMI
 
 statement-list: (statement)*
 statement ::= IDENT ASSIGN expression SEMI |
+              func-call SEMI
               LBRACE staement-list RBRACE |
               IF LPAR expression RPAR statement |
               IF LPAR expression RPAR statement ELSE statement |
@@ -102,7 +103,8 @@ addition ::= (mul (PLUS|MINUS))+ mul |
 mul ::= (atom (MUL|DIV))+ atom |
         atom
 atom ::= IDENT |
-         IDENT LPAR (expr COMA)* expr RPAR
+         func-call
          NUMBER |
          LPAR expression RPAR
+func-call ::= IDENT LPAR (expr COMA)* expr RPAR
 
